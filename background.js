@@ -17,6 +17,9 @@ function onCommand(command) {
         case 'play-pause':
           code = '(document.querySelector(".spoticon-pause-16") || document.querySelector(".spoticon-play-16")).click()';
           break;
+        case 'save-to-library':
+          code = 'document.querySelector(".spoticon-add-16").click()';
+          break;
       }
     }
 

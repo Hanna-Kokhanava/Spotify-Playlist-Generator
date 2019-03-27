@@ -11,15 +11,19 @@
    "commands": {
       "next": {
          "description": "Next track",
-         "suggested_key": "Ctrl+Right"
+         "suggested_key": "Alt+3"
       },
       "play-pause": {
          "description": "Play/pause",
-         "suggested_key": "Ctrl+Down"
+         "suggested_key": "Alt+2"
       },
       "previous": {
          "description": "Previous track",
-         "suggested_key": "Ctrl+Left"
+         "suggested_key": "Alt+1"
+      },
+      "save-to-library": {
+        "description": "Save to library",
+        "suggested_key": "Alt+4"
       }
    },
    "permissions": [
