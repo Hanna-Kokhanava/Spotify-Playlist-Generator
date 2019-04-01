@@ -20,6 +20,9 @@ function onCommand(command) {
         case 'save-to-library':
           code = 'document.querySelector(".spoticon-add-16").click()';
           break;
+        case 'shuffle':
+          code = 'document.querySelector(".spoticon-shuffle-16").click()';
+          break;
       }
     }
 

@@ -22,7 +22,10 @@
          "suggested_key": "Alt+1"
       },
       "save-to-library": {
-        "description": "Save to library",
+        "description": "Save to library"
+      },
+      "shuffle": {
+        "description": "Shuffle",
         "suggested_key": "Alt+4"
       }
    },
