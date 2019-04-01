@@ -4,6 +4,10 @@
    "version": "1.0",
    "manifest_version": 2,
 
+   "browser_action": {
+     "default_popup": "index.html"
+   },
+
    "background": {
       "persistent": false,
       "scripts": [ "background.js" ]
@@ -31,5 +35,6 @@
    },
    "permissions": [
      "https://open.spotify.com/*",
-     "https://play.spotify.com/*" ]
+     "https://play.spotify.com/*",
+      "https://ajax.googleapis.com/"]
 }
