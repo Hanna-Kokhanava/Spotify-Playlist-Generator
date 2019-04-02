@@ -5,7 +5,7 @@
    "manifest_version": 2,
 
    "browser_action": {
-     "default_popup": "index.html"
+     "default_popup": "default.html"
    },
 
    "background": {
@@ -34,7 +34,8 @@
       }
    },
    "permissions": [
-     "https://open.spotify.com/*",
-     "https://play.spotify.com/*",
-      "https://ajax.googleapis.com/"]
+    "https://open.spotify.com/*",
+    "https://play.spotify.com/*",
+    "storage",
+    "identity"]
 }
