@@ -7,10 +7,9 @@ chrome.runtime.onInstalled.addListener(function () {
     chrome.storage.local.clear();
 });
 
-// onInstalled or onStartup
 chrome.runtime.onStartup.addListener(function() {
   chrome.storage.local.get("status", function(loginStatusObj) {
-    if (chrome.runtime.lasterror || loginStatusObj.loginStatus != "loggedin") {
+    if (chrome.runtime.lasterror || loginStatusObj.status != "loggedin") {
       return;
     }
   });
@@ -26,8 +25,8 @@ chrome.runtime.onStartup.addListener(function() {
 
 
 function updateLoginStatusAndPopupView(newStatus) {
-  console.log("Update login status with " + newStatus);
-  chrome.storage.local.set({"status": newStatus});
+  console.log("Update login status with : " + newStatus);
+  chrome.storage.local.set({ "status" : newStatus });
   let popupView = newStatus + ".html";
   chrome.browserAction.setPopup({ popup: `${popupView}` });
   chrome.runtime.sendMessage({ action: "updatePopup", path: `${popupView}` });
@@ -37,33 +36,31 @@ function accessTokenExchange(authCode, redirectURI) {
     return new Promise(function (resolve, reject) {
         let xhr = new XMLHttpRequest();
         xhr.open('POST', 'https://accounts.spotify.com/api/token');
-
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.setRequestHeader('Accept', 'application/json');
         let encodedAuthValue = btoa(clientID + ":" + clientSecret);
         xhr.setRequestHeader('Authorization', `Basic ${encodedAuthValue}`);
 
-        let xhrBody = `grant_type=authorization_code` +
+        let xhrBody = `grant_type=client_credentials` +
             `&code=${authCode}` +
             `&redirect_uri=${redirectURI}`;
 
-        // runs after completing XHR request
         xhr.onload = function () {
-            console.log("finished XHR request !!!");
-
             if (xhr.status >= 200 && xhr.status < 300) {
                 chrome.storage.local.set({ "lastXHRRetrievalTime": Date.now() });
 
                 let resp = JSON.parse(xhr.response);
-
                 chrome.storage.local.set({ "accessToken": resp["access_token"] });
                 chrome.storage.local.set({ "refreshToken": resp["refresh_token"] });
 
-                updateLoginStatusAndPopup("loggedin");
-                resolve();
+                chrome.storage.local.get('accessToken', function(result) {
+                   console.log(result.accessToken);
+                });
 
+                updateLoginStatusAndPopupView("loggedin");
+                resolve();
             } else {
-                reject("invalid XHR request !!!");
+                reject("Invalid XHR request");
             }
         };
 
@@ -75,28 +72,22 @@ function accessTokenExchange(authCode, redirectURI) {
 function authorizeSpotify() {
     return new Promise(function (resolve, reject) {
         const scope = "user-follow-read";
-        const redirectURI = "https://developer.spotify.com";
-        // const redirectURI = chrome.identity.getRedirectURL("callback/");
+        const redirectURI = chrome.identity.getRedirectURL() + "spotify";
 
-        let authURL = `https://accounts.spotify.com/authorize?` +
-            `client_id=${clientID}` +
-            `&response_type=code&redirect_uri=${redirectURI}` +
-            `&scope=${scope}`;
-
-            console.log(authURL);
+        let authURL = "https://accounts.spotify.com/authorize?" +
+            "client_id=" + clientID +
+            "&response_type=token&redirect_uri=" + redirectURI;
 
         chrome.identity.launchWebAuthFlow({
                 url: authURL,
                 interactive: true
             }, function (responseUrl) {
                 if (chrome.runtime.lastError) {
-                    console.log(chrome.runtime.lastError);
                     updateLoginStatusAndPopupView("error");
                     reject("user login was unsuccessful");
                 } else {
                     let authCode = responseUrl.split("=")[1];
                     resolve({ authCode: authCode, redirectURI: redirectURI });
-
                 }
             }
         );
@@ -105,79 +96,74 @@ function authorizeSpotify() {
 
 function logoutUser() {
     chrome.storage.local.clear();
-
     chrome.identity.launchWebAuthFlow(
         {
             url: 'https://accounts.spotify.com/en/logout',
             interactive: true
         },
 
-        function (responseUrl){
-            if(chrome.runtime.lastError) {
-                console.log("user exited out of login/logout screen");
+        function (responseUrl) {
+            if (chrome.runtime.lastError) {
+                console.log(chrome.runtime.lastError);
             }
-            console.log("finished logging out!")
+            console.log("User was logged out");
         }
     )
-
     updateLoginStatusAndPopupView("default");
 }
 
 
-// USAGE:    handles message passing from various content scripts
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action == "launchOAuth") {
         console.log("Starting authorization process");
-
-        authorizeSpotify()
-        .then(function (authResult) {
+        authorizeSpotify().then(function (authResult) {
             return (accessTokenExchange(authResult["authCode"], authResult["redirectURI"]));
-
         }).catch(function (error) {
             console.log(error);
         });
 
     } else if (request.action == "logoutUser") {
-        console.log("trying to log user out!");
         logoutUser();
-
+    } else if (request.action == "generate") {
+      let accessTokenPromise = getAccessToken();
+        getObjects("https://api.spotify.com/v1/me/following?type=artist&limit=50", accessTokenPromise.accessToken);
     } else {
         console.log("Request [ " + request.action + " ] failed :(");
-
     }
 });
 
+function getObjects(endpoint, accessToken) {
+    return new Promise(function (resolve, reject) {
+        let xhr = new XMLHttpRequest();
+        xhr.open('GET', `${endpoint}`);
 
-chrome.commands.onCommand.addListener(function(command) {
-  chrome.tabs.query({url: 'https://*.spotify.com/*'}, function(tabs) {
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
 
-    if (tabs.length === 0) {
-      chrome.tabs.create({url: 'https://open.spotify.com/'});
-    }
+        xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                let resp = JSON.parse(xhr.response);
+                resolve(resp);
+            } else {
+                console.log("something went funk when requesting for objects...");
+                reject();
+            }
+        }
 
-    for (var tab of tabs) {
-      var code = '';
-      switch (command) {
-        case 'next':
-          code = 'document.querySelector(".spoticon-skip-forward-16").click()';
-          break;
-        case 'previous':
-          code = 'document.querySelector(".spoticon-skip-back-16").click()';
-          break;
-        case 'play-pause':
-          code = '(document.querySelector(".spoticon-pause-16") || document.querySelector(".spoticon-play-16")).click()';
-          break;
-        case 'save-to-library':
-          code = 'document.querySelector(".spoticon-add-16").click()';
-          break;
-        case 'shuffle':
-          code = 'document.querySelector(".spoticon-shuffle-16").click()';
-          break;
-      }
-    }
+        xhr.send();
+    });
+}
 
-    if (code.length) {
-      chrome.tabs.executeScript(tab.id, {code: code});
-    }
-  });
-});
+function getAccessToken() {
+    return new Promise(function (resolve, reject) {
+        chrome.storage.local.get("accessToken", function (resp) {
+            if (chrome.runtime.lastError) {
+                console.log("Smth goes wrong!");
+                reject();
+            }
+            console.log(resp.accessToken)
+            resolve({ accessToken: resp.accessToken });
+        });
+    });
+}

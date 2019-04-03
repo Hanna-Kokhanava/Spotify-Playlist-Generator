@@ -10,7 +10,7 @@ let authButton = document.getElementById('userAuth');
 
 authButton.addEventListener('click', function() {
     chrome.storage.local.get("status", function(statusObj) {
-        var status = statusObj.loginStatus;
+        var status = statusObj.status;
 
         if (chrome.runtime.lastError || status != "loggedin") {
             console.log("Sending message for authentication process initiation");
@@ -21,4 +21,10 @@ authButton.addEventListener('click', function() {
             chrome.runtime.sendMessage({action: 'logoutUser'});
         }
     });
+});
+
+let generateButton = document.getElementById('generate');
+
+generateButton.addEventListener('click', function() {
+    chrome.runtime.sendMessage({action: 'generate'});
 });

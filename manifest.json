@@ -1,6 +1,6 @@
 {
-   "name": "Hot keys for Spotify Web Player",
-   "description": "Add keyboard shortcuts for Spotify Web Player",
+   "name": "Spotify Playlist Generator",
+   "description": "Generates playlists",
    "version": "1.0",
    "manifest_version": 2,
 
@@ -12,30 +12,15 @@
       "persistent": false,
       "scripts": [ "background.js" ]
    },
-   "commands": {
-      "next": {
-         "description": "Next track",
-         "suggested_key": "Alt+3"
-      },
-      "play-pause": {
-         "description": "Play/pause",
-         "suggested_key": "Alt+2"
-      },
-      "previous": {
-         "description": "Previous track",
-         "suggested_key": "Alt+1"
-      },
-      "save-to-library": {
-        "description": "Save to library"
-      },
-      "shuffle": {
-        "description": "Shuffle",
-        "suggested_key": "Alt+4"
-      }
-   },
+
    "permissions": [
-    "https://open.spotify.com/*",
-    "https://play.spotify.com/*",
-    "storage",
-    "identity"]
+      "storage",
+  		"identity",
+  		"tabs",
+  		"notifications",
+      "https://open.spotify.com/*",
+      "https://play.spotify.com/*",
+      "https://accounts.spotify.com/authorize/*",
+      "https://developer.spotify.com/*"
+  ]
 }
