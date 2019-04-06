@@ -7,7 +7,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 });
 
 let authButton = document.getElementById('userAuth');
-
 authButton.addEventListener('click', function() {
     chrome.storage.local.get("status", function(statusObj) {
         var status = statusObj.status;
@@ -21,10 +20,4 @@ authButton.addEventListener('click', function() {
             chrome.runtime.sendMessage({action: 'logoutUser'});
         }
     });
-});
-
-let generateButton = document.getElementById('generate');
-
-generateButton.addEventListener('click', function() {
-    chrome.runtime.sendMessage({action: 'generate'});
 });

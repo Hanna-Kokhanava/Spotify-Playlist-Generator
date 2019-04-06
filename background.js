@@ -14,12 +14,15 @@ chrome.runtime.onStartup.addListener(function() {
     }
   });
 
-  chrome.storage.local.get("token", function(token) {
-    if (chrome.runtime.lasterror || typeof token["token"] == "undefined") {
+  chrome.storage.local.get("refreshToken", function(refreshToken) {
+    if (chrome.runtime.lasterror || typeof refreshToken["refreshToken"] == "undefined") {
+      console.log("Refresh token is undefined");
       return;
     }
 
     updateLoginStatusAndPopupView("loggedin");
+
+    checkAccessToken(refreshToken);
   });
 });
 
@@ -41,7 +44,7 @@ function accessTokenExchange(authCode, redirectURI) {
         let encodedAuthValue = btoa(clientID + ":" + clientSecret);
         xhr.setRequestHeader('Authorization', `Basic ${encodedAuthValue}`);
 
-        let xhrBody = `grant_type=client_credentials` +
+        let xhrBody = `grant_type=authorization_code` +
             `&code=${authCode}` +
             `&redirect_uri=${redirectURI}`;
 
@@ -50,12 +53,9 @@ function accessTokenExchange(authCode, redirectURI) {
                 chrome.storage.local.set({ "lastXHRRetrievalTime": Date.now() });
 
                 let resp = JSON.parse(xhr.response);
+                console.log(resp);
                 chrome.storage.local.set({ "accessToken": resp["access_token"] });
                 chrome.storage.local.set({ "refreshToken": resp["refresh_token"] });
-
-                chrome.storage.local.get('accessToken', function(result) {
-                   console.log(result.accessToken);
-                });
 
                 updateLoginStatusAndPopupView("loggedin");
                 resolve();
@@ -71,12 +71,14 @@ function accessTokenExchange(authCode, redirectURI) {
 
 function authorizeSpotify() {
     return new Promise(function (resolve, reject) {
-        const scope = "user-follow-read";
+        const scopes = "user-read-private playlist-read-private";
         const redirectURI = chrome.identity.getRedirectURL() + "spotify";
 
         let authURL = "https://accounts.spotify.com/authorize?" +
-            "client_id=" + clientID +
-            "&response_type=token&redirect_uri=" + redirectURI;
+            "client_id=" + clientID
+            + "&response_type=code"
+            + "&scope=" + encodeURIComponent(scopes)
+            + "&redirect_uri=" + redirectURI;
 
         chrome.identity.launchWebAuthFlow({
                 url: authURL,
@@ -84,7 +86,7 @@ function authorizeSpotify() {
             }, function (responseUrl) {
                 if (chrome.runtime.lastError) {
                     updateLoginStatusAndPopupView("error");
-                    reject("user login was unsuccessful");
+                    reject("User login was unsuccessful");
                 } else {
                     let authCode = responseUrl.split("=")[1];
                     resolve({ authCode: authCode, redirectURI: redirectURI });
@@ -116,22 +118,30 @@ function logoutUser() {
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action == "launchOAuth") {
         console.log("Starting authorization process");
-        authorizeSpotify().then(function (authResult) {
+        authorizeSpotify()
+        .then(function (authResult) {
             return (accessTokenExchange(authResult["authCode"], authResult["redirectURI"]));
-        }).catch(function (error) {
+        })
+        .catch(function (error) {
             console.log(error);
         });
-
     } else if (request.action == "logoutUser") {
         logoutUser();
     } else if (request.action == "generate") {
-      let accessTokenPromise = getAccessToken();
-        getObjects("https://api.spotify.com/v1/me/following?type=artist&limit=50", accessTokenPromise.accessToken);
+
+      chrome.storage.local.get("accessToken", function (resp) {
+          if (chrome.runtime.lastError) {
+              console.log("Smth goes wrong!");
+          }
+          getObjects("https://api.spotify.com/v1/me", resp.accessToken);
+      });
+
     } else {
         console.log("Request [ " + request.action + " ] failed :(");
     }
 });
 
+//TODO just to test that authorization process works correctly
 function getObjects(endpoint, accessToken) {
     return new Promise(function (resolve, reject) {
         let xhr = new XMLHttpRequest();
@@ -146,7 +156,7 @@ function getObjects(endpoint, accessToken) {
                 let resp = JSON.parse(xhr.response);
                 resolve(resp);
             } else {
-                console.log("something went funk when requesting for objects...");
+                console.log("Smth went wrong");
                 reject();
             }
         }
@@ -155,15 +165,43 @@ function getObjects(endpoint, accessToken) {
     });
 }
 
-function getAccessToken() {
+function checkAccessToken(refreshToken) {
     return new Promise(function (resolve, reject) {
-        chrome.storage.local.get("accessToken", function (resp) {
-            if (chrome.runtime.lastError) {
-                console.log("Smth goes wrong!");
-                reject();
+        chrome.storage.local.get("lastXHRRetrievalTime", function (time) {
+            if (chrome.runtime.lastError || typeof time == "undefined") {
+                console.log("Can't find time of last successful XHR retrieval");
             }
-            console.log(resp.accessToken)
-            resolve({ accessToken: resp.accessToken });
+
+            // check if stored access token is still valid
+            var timeElapsed = Date.now() - time;
+            console.log(timeElapsed);
+            if (!isNaN(timeElapsed) && timeElapsed <= 3540000) {  // 59 minutes in milliseconds
+                return;
+            }
+
+            // refresh access token
+            let xhrRefresh = new XMLHttpRequest();
+            xhrRefresh.open('POST', 'https://accounts.spotify.com/api/token');
+            xhrRefresh.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhrRefresh.setRequestHeader('Accept', 'application/json');
+            let encodedAuthValue = btoa(clientID + ":" + clientSecret);
+            xhrRefresh.setRequestHeader('Authorization', `Basic ${encodedAuthValue}`);
+
+            let xhrRefreshBody = `grant_type=refresh_token` +
+                `&refresh_token=${refreshToken["refreshToken"]}`;
+
+            xhrRefresh.onload = function () {
+                if (xhrRefresh.status >= 200 && xhrRefresh.status < 300) {
+                    console.log("Access token is refreshed");
+                    let resp = JSON.parse(xhrRefresh.response);
+                    chrome.storage.local.set({ "accessToken": resp });
+                    resolve();
+                } else {
+                    reject("invalid XHR refresh request");
+                }
+            };
+
+            xhrRefresh.send(xhrRefreshBody);
         });
-    });
+    })
 }
